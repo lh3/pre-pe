@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-g -Wall -O2 -Wno-unused-function
-PROG=pre-adna pre-lianti
+PROG=pre-adna pre-lianti pre-dip-c
 
 .c.o:
 		$(CC) -c $(CFLAGS) $(CPPFLAGS) $(INCLUDES) $< -o $@
@@ -11,6 +11,9 @@ pre-adna:kthread.o pre-adna.o
 		$(CC) $(CFLAGS) $^ -o $@ -lz -lm -lpthread
 
 pre-lianti:kthread.o pre-lianti.o
+		$(CC) $(CFLAGS) $^ -o $@ -lz -lm -lpthread
+
+pre-dip-c:kthread.o pre-dip-c.o
 		$(CC) $(CFLAGS) $^ -o $@ -lz -lm -lpthread
 
 clean:
