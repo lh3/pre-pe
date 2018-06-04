@@ -34,6 +34,8 @@ Pre-pe consists of the following tools:
   similar to pre-dip-c except that it additionally checks ambiguous end merges
   to greatly reduce artifactual deletions.
 
+Of these tools pre-adna may be of general interest.
+
 [seqtk]: https://github.com/lh3/seqtk
 [bwa]: https://github.com/lh3/bwa
 [udg]: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4275898/
