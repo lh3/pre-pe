@@ -20,7 +20,8 @@ Most other short-read mappers don't have this functionality.
 Pre-pe consists of the following tools:
 
 * pre-lianti for single-cell whole-genome sequencing data produced with the
-  [LIANTI protocol][lianti]. It is the first tool in this series.
+  [LIANTI protocol][lianti]. It is the first tool in this series and also
+  available from my [lianti repo][lianti-repo].
 
 * pre-adna for ancient data produced with the [Reich Lab protocol][udg]. This
   program is also available from the [adna repo][adna]. It has been used to
@@ -38,4 +39,5 @@ Pre-pe consists of the following tools:
 [udg]: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4275898/
 [adna]: https://github.com/DReichLab/adna
 [lianti]: https://www.ncbi.nlm.nih.gov/pubmed/28408603
+[lianti-repo]: https://github.com/lh3/lianti
 [longzhi]: https://github.com/tanlongzhi
