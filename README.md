@@ -19,18 +19,23 @@ Most other short-read mappers don't have this functionality.
 
 Pre-pe consists of the following tools:
 
-* pre-adna for ancient data produced with the [Reich Lab protocol][udg]. This
-  program is also available from the [adna repo][adna].
-
 * pre-lianti for single-cell whole-genome sequencing data produced with the
-  [LIANTI protocol][lianti].
+  [LIANTI protocol][lianti]. It is the first tool in this series.
 
-* pre-dip-c for single-cell Hi-C data produced with the DIP-C protocol.
+* pre-adna for ancient data produced with the [Reich Lab protocol][udg]. This
+  program is also available from the [adna repo][adna]. It has been used to
+  process hundreds of ancient full genomes from the Reich lab.
 
-* pre-meta for single-cell genomic data produced with the META protocol.
+* pre-dip-c for single-cell Hi-C data produced with the Dip-C protocol. It was
+  modified from pre-lianti by [Longzhi Tan][longzhi].
+
+* pre-meta for single-cell genomic data produced with the META protocol. It is
+  similar to pre-dip-c except that it additionally checks ambiguous end merges
+  to greatly reduce artifactual deletions.
 
 [seqtk]: https://github.com/lh3/seqtk
 [bwa]: https://github.com/lh3/bwa
 [udg]: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4275898/
 [adna]: https://github.com/DReichLab/adna
 [lianti]: https://www.ncbi.nlm.nih.gov/pubmed/28408603
+[longzhi]: https://github.com/tanlongzhi
