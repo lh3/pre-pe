@@ -507,7 +507,7 @@ static void *worker_pipeline(void *shared, int step, void *_data)
 		}
 		for (i = 0; i < data->n_seqs; ++i) { // deallocate
 			bseq1_t *s = &data->seqs[i];
-			free(s->bc_f); free(s->bc_r); free(s->seq); free(s->qual); free(s->name);
+			free(s->bc_cat); free(s->bc_f); free(s->bc_r); free(s->seq); free(s->qual); free(s->name);
 		}
 		free(data->seqs); free(data);
 	}
