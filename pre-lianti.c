@@ -478,7 +478,7 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 					if (l < s[r].l_seq) {
 						for (i = l; i < s[r].l_seq; ++i)
 							xseq[x] = rseq[i], xqual[x++] = rqual[i];
-					} else {
+					} else { // FIXME: please check pre-meta.c; this block is probably buggy!!!
 						for (i = bpos + l; i < s[f].l_seq; ++i)
 							xseq[x] = s[f].seq[i], xqual[x++] = s[f].qual[i];
 					}

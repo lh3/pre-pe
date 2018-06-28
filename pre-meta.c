@@ -355,20 +355,24 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 			int x = 0;
 			if (n_fh == 1) {
 				int l = (uint32_t)fh[0], st = fh[0]>>32;
-				s[0].type = s[1].type = LT_MERGE_PARTIAL;
-				for (i = 0; i < st; ++i)
-					xseq[x] = s[0].seq[i], xqual[x++] = s[0].qual[i];
-				for (i = 0; i < l; ++i) {
-					int j = st + i, y;
-					y = merge_base(g->opt.max_qual, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
-					xseq[x] = (uint8_t)y, xqual[x++] = y>>8;
-				}
-				if (l < s[1].l_seq) {
+				if (l < s[1].l_seq) { // partial overlap
+					s[0].type = s[1].type = LT_MERGE_PARTIAL;
+					for (i = 0; i < st; ++i)
+						xseq[x] = s[0].seq[i], xqual[x++] = s[0].qual[i];
+					for (i = 0; i < l; ++i) {
+						int j = st + i, y;
+						y = merge_base(g->opt.max_qual, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
+						xseq[x] = (uint8_t)y, xqual[x++] = y>>8;
+					}
 					for (i = l; i < s[1].l_seq; ++i)
 						xseq[x] = rseq[i], xqual[x++] = rqual[i];
-				} else {
-					for (i = l; i < s[0].l_seq; ++i)
-						xseq[x] = s[0].seq[i], xqual[x++] = s[0].qual[i];
+				} else { // s[1] is contained in s[0]
+					s[0].type = s[1].type = LT_MERGE_COMPLETE;
+					for (i = 0; i < l; ++i) {
+						int j = st + i, y;
+						y = merge_base(g->opt.max_qual, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
+						xseq[x] = (uint8_t)y, xqual[x++] = y>>8;
+					}
 				}
 			} else if (n_rh == 1) {
 				int l = (uint32_t)rh[0], st = rh[0]>>32;
@@ -380,7 +384,7 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 					y = merge_base(g->opt.max_qual, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
 					xseq[x] = (uint8_t)y, xqual[x++] = y>>8;
 				}
-			} else {
+			} else { // s[0] is contained in s[1]
 				int j, st = ch[0]>>32;
 				s[0].type = s[1].type = LT_MERGE_COMPLETE;
 				for (j = 0; j < s[0].l_seq; ++j) {
