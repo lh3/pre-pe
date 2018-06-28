@@ -38,6 +38,7 @@ typedef struct {
 	int max_olig_pen, min_olig_len;
 	int tab_out;
 	int bc_cut;
+	int qmask;
 } lt_opt_t;
 
 static void lt_opt_init(lt_opt_t *opt)
@@ -54,6 +55,7 @@ static void lt_opt_init(lt_opt_t *opt)
 	opt->max_olig_pen = 2;
 	opt->min_olig_len = 10; // total length = 19
 	opt->bc_cut = 1;
+	opt->qmask = 20;
 }
 
 /**********************
@@ -231,14 +233,15 @@ static inline void trim_bseq_5(bseq1_t *s, int l)
 	s->seq[s->l_seq] = s->qual[s->l_seq] = 0;
 }
 
-static inline int merge_base(int max_qual, char fc, char fq, char rc, char rq)
+static inline int merge_base(int max_qual, int qmask, char fc, char fq, char rc, char rq)
 {
 	int y;
 	if (fc == rc) {
 		int q = fq > rq? (fq - 33) + (rq - 33) / 2 : (rq - 33) + (fq - 33) / 2;
 		y = toupper(fc) | (33 + (q < max_qual? q : max_qual)) << 8;
 	} else {
-		if (fq > rq) y = toupper(fc) | (33 + (fq - rq)) << 8;
+		if (fq - 33 >= qmask && rq - 33 >= qmask) y = 'N' | 33 << 8;
+		else if (fq > rq) y = toupper(fc) | (33 + (fq - rq)) << 8;
 		else y = toupper(rc) | (33 + (rq - fq)) << 8;
 	}
 	return y;
@@ -361,7 +364,7 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 						xseq[x] = s[0].seq[i], xqual[x++] = s[0].qual[i];
 					for (i = 0; i < l; ++i) {
 						int j = st + i, y;
-						y = merge_base(g->opt.max_qual, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
+						y = merge_base(g->opt.max_qual, g->opt.qmask, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
 						xseq[x] = (uint8_t)y, xqual[x++] = y>>8;
 					}
 					for (i = l; i < s[1].l_seq; ++i)
@@ -370,7 +373,7 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 					s[0].type = s[1].type = LT_MERGE_COMPLETE;
 					for (i = 0; i < l; ++i) {
 						int j = st + i, y;
-						y = merge_base(g->opt.max_qual, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
+						y = merge_base(g->opt.max_qual, g->opt.qmask, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
 						xseq[x] = (uint8_t)y, xqual[x++] = y>>8;
 					}
 				}
@@ -381,7 +384,7 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 					xseq[x] = s[0].seq[i], xqual[x++] = s[0].qual[i];
 				for (i = s[1].l_seq - l; i < s[1].l_seq; ++i) {
 					int j = i - s[1].l_seq + (s[0].l_seq - st), y;
-					y = merge_base(g->opt.max_qual, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
+					y = merge_base(g->opt.max_qual, g->opt.qmask, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
 					xseq[x] = (uint8_t)y, xqual[x++] = y>>8;
 				}
 			} else { // s[0] is contained in s[1]
@@ -389,7 +392,7 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 				s[0].type = s[1].type = LT_MERGE_COMPLETE;
 				for (j = 0; j < s[0].l_seq; ++j) {
 					int i = j + st, y;
-					y = merge_base(g->opt.max_qual, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
+					y = merge_base(g->opt.max_qual, g->opt.qmask, s[0].seq[j], s[0].qual[j], rseq[i], rqual[i]);
 					xseq[x] = (uint8_t)y, xqual[x++] = y>>8;
 				}
 			}
@@ -491,12 +494,12 @@ static void *worker_pipeline(void *shared, int step, void *_data)
 						putchar('/'); putchar("12"[i&1]);
 					}
 					printf(" YT:i:%d", s->type);
+					if (s->bc_cat) { fputs("\tBC:Z:", stdout); fputs(s->bc_cat, stdout); }
+					else fputs("\tBC:Z:*", stdout);
 					printf("\tPF:i:%d", s->olig_pos_f);
 					printf("\tPR:i:%d", s->olig_pos_r);
 					if (s->bc_f) { fputs("\tBF:Z:", stdout); fputs(s->bc_f[0] == 0? "*" : s->bc_f, stdout); }
 					if (s->bc_r) { fputs("\tBR:Z:", stdout); fputs(s->bc_r[0] == 0? "*" :s->bc_r, stdout); }
-					if (s->bc_cat) { fputs("\tBC:Z:", stdout); fputs(s->bc_cat, stdout); }
-					else fputs("\tBC:Z:*", stdout);
 					putchar('\n');
 					puts(s->seq);
 					if (s->qual) { puts("+"); puts(s->qual); }
@@ -521,11 +524,12 @@ int main(int argc, char *argv[])
 	gzFile fp;
 
 	lt_global_init(&g);
-	while ((c = getopt(argc, argv, "Tt:b:l:c:")) >= 0) {
+	while ((c = getopt(argc, argv, "Tt:b:l:c:q:")) >= 0) {
 		if (c == 't') g.opt.n_threads = atoi(optarg);
 		else if (c == 'T') g.opt.tab_out = 1;
 		else if (c == 'l') g.opt.min_seq_len = atoi(optarg);
 		else if (c == 'c') g.opt.bc_cut = atoi(optarg);
+		else if (c == 'q') g.opt.qmask = atoi(optarg);
 	}
 	if (argc - optind < 1) {
 		fprintf(stderr, "Usage: seqtk mergepe <read1.fq> <read2.fq> | pre-meta [options] -\n");
@@ -533,6 +537,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "  -t INT     number of threads [%d]\n", g.opt.n_threads);
 		fprintf(stderr, "  -l INT     min read/fragment length to output [%d]\n", g.opt.min_seq_len);
 		fprintf(stderr, "  -c INT     cut INT-bp from the 5'-end to derive concatenated BC [%d]\n", g.opt.bc_cut);
+		fprintf(stderr, "  -q INT     if both qualities on an overlap base above INT, mask to N [%d]\n", g.opt.qmask);
 		fprintf(stderr, "  -T         tabular output for debugging\n");
 		return 1;
 	}
