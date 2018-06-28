@@ -37,6 +37,7 @@ typedef struct {
 	int max_adap_pen, min_adap_len;
 	int max_olig_pen, min_olig_len;
 	int tab_out;
+	int bc_cut;
 } lt_opt_t;
 
 static void lt_opt_init(lt_opt_t *opt)
@@ -52,6 +53,7 @@ static void lt_opt_init(lt_opt_t *opt)
 	opt->min_adap_len = 3;
 	opt->max_olig_pen = 2;
 	opt->min_olig_len = 10; // total length = 19
+	opt->bc_cut = 1;
 }
 
 /**********************
@@ -173,7 +175,7 @@ typedef struct {
 	uint32_t l_seq:31, dbl_bind:1;
 	enum lt_type_e type;
 	int olig_pos_f, olig_pos_r;
-	char *name, *seq, *qual, *bc_f, *bc_r;
+	char *name, *seq, *qual, *bc_f, *bc_r, *bc_cat;
 } bseq1_t;
 
 bseq1_t *bseq_read(kseq_t *ks, int chunk_size, int *n_)
@@ -294,8 +296,9 @@ static inline void trim_olig(bseq1_t *s, const char *adap, int is_5, int min_len
 
 void lt_process(const lt_global_t *g, bseq1_t s[2])
 {
-	int i, k, mlen;
+	int i, k, mlen, oligo_len;
 	mlen = s[0].l_seq > s[1].l_seq? s[0].l_seq : s[1].l_seq;
+	oligo_len = strlen(lt_oligo_for);
 
 	// trim heading and trailing N
 	for (k = 0; k < 2; ++k) {
@@ -328,7 +331,7 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 
 	
 	{ // merge the two ends
-		int n_fh, n_rh, n_ch;
+		int n_fh, n_rh, n_ch, is_complete;
 		uint64_t fh[2], rh[2], ch[2];
 		char *rseq, *rqual, *xseq, *xqual;
 		rseq = (char*)alloca(mlen + 1);
@@ -342,7 +345,9 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 		n_fh = lt_ue_for(s[0].l_seq, s[0].seq, s[0].qual, s[1].l_seq, rseq, rqual, g->opt.max_ovlp_pen, g->opt.min_ovlp_len, 2, fh);
 		n_rh = lt_ue_rev(s[0].l_seq, &s[0].seq[0], &s[0].qual[0], s[1].l_seq, rseq, rqual, g->opt.max_ovlp_pen, g->opt.min_ovlp_len, 2, rh);
 		n_ch = lt_ue_contained(s[0].l_seq, &s[0].seq[0], &s[0].qual[0], s[1].l_seq, rseq, rqual, g->opt.max_ovlp_pen, 2, ch);
-		if (n_fh + n_rh + n_ch > 1) {
+		// Sometimes forward and reverse search give identical hits, which are not caused by an ambiguous merge. I forgot why this is even a case.
+		is_complete = (n_fh == 1 && n_rh == 1 && fh[0]>>32 == 0 && rh[0]>>32 == 0 && (int32_t)fh[0] == (int32_t)rh[0]);
+		if (n_fh + n_rh + n_ch > 1 && !is_complete) {
 			s[0].type = s[1].type = LT_MERGE_AMBIGUOUS;
 		} else if (n_fh + n_rh + n_ch == 0) {
 			s[0].type = s[1].type = LT_NO_MERGE;
@@ -419,6 +424,14 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 		s[k].olig_pos_r = olig_pos[1];
 		s[k].bc_f = strdup(bc[0]);
 		s[k].bc_r = strdup(bc[1]);
+		if (s[k].olig_pos_f > oligo_len + g->opt.bc_cut && s[k].olig_pos_r > oligo_len + g->opt.bc_cut) {
+			int l[2];
+			l[0] = s[k].olig_pos_f - (oligo_len + g->opt.bc_cut);
+			l[1] = s[k].olig_pos_r - (oligo_len + g->opt.bc_cut);
+			s[k].bc_cat = (char*)calloc(l[0] + l[1] + 1, 1);
+			strncpy(s[k].bc_cat,        &s[k].bc_f[g->opt.bc_cut], l[0]);
+			strncpy(&s[k].bc_cat[l[0]], &s[k].bc_r[g->opt.bc_cut], l[1]);
+		} else s[k].bc_cat = 0;
 	}
 }
 
@@ -478,6 +491,8 @@ static void *worker_pipeline(void *shared, int step, void *_data)
 					printf("\tPR:i:%d", s->olig_pos_r);
 					if (s->bc_f) { fputs("\tBF:Z:", stdout); fputs(s->bc_f[0] == 0? "*" : s->bc_f, stdout); }
 					if (s->bc_r) { fputs("\tBR:Z:", stdout); fputs(s->bc_r[0] == 0? "*" :s->bc_r, stdout); }
+					if (s->bc_cat) { fputs("\tBC:Z:", stdout); fputs(s->bc_cat, stdout); }
+					else fputs("\tBC:Z:*", stdout);
 					putchar('\n');
 					puts(s->seq);
 					if (s->qual) { puts("+"); puts(s->qual); }
@@ -502,16 +517,18 @@ int main(int argc, char *argv[])
 	gzFile fp;
 
 	lt_global_init(&g);
-	while ((c = getopt(argc, argv, "Tt:b:l:")) >= 0) {
+	while ((c = getopt(argc, argv, "Tt:b:l:c:")) >= 0) {
 		if (c == 't') g.opt.n_threads = atoi(optarg);
 		else if (c == 'T') g.opt.tab_out = 1;
 		else if (c == 'l') g.opt.min_seq_len = atoi(optarg);
+		else if (c == 'c') g.opt.bc_cut = atoi(optarg);
 	}
 	if (argc - optind < 1) {
-		fprintf(stderr, "Usage: seqtk mergepe <read1.fq> <read2.fq> | pre-dip-c [options] -\n");
+		fprintf(stderr, "Usage: seqtk mergepe <read1.fq> <read2.fq> | pre-meta [options] -\n");
 		fprintf(stderr, "Options:\n");
 		fprintf(stderr, "  -t INT     number of threads [%d]\n", g.opt.n_threads);
 		fprintf(stderr, "  -l INT     min read/fragment length to output [%d]\n", g.opt.min_seq_len);
+		fprintf(stderr, "  -c INT     cut INT-bp from the 5'-end to derive concatenated BC [%d]\n", g.opt.bc_cut);
 		fprintf(stderr, "  -T         tabular output for debugging\n");
 		return 1;
 	}
