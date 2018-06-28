@@ -334,7 +334,7 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 
 	
 	{ // merge the two ends
-		int n_fh, n_rh, n_ch, is_complete;
+		int n_fh, n_rh, n_ch;
 		uint64_t fh[2], rh[2], ch[2];
 		char *rseq, *rqual, *xseq, *xqual;
 		rseq = (char*)alloca(mlen + 1);
@@ -346,11 +346,10 @@ void lt_process(const lt_global_t *g, bseq1_t s[2])
 		lt_seq_rev(s[1].l_seq, s[1].qual, rqual);
 		// find overlaps
 		n_fh = lt_ue_for(s[0].l_seq, s[0].seq, s[0].qual, s[1].l_seq, rseq, rqual, g->opt.max_ovlp_pen, g->opt.min_ovlp_len, 2, fh);
-		n_rh = lt_ue_rev(s[0].l_seq, &s[0].seq[0], &s[0].qual[0], s[1].l_seq, rseq, rqual, g->opt.max_ovlp_pen, g->opt.min_ovlp_len, 2, rh);
+		if (fh[0]>>32 == 0 && s[0].l_seq == s[1].l_seq && (int32_t)fh[0] == s[0].l_seq) n_rh = 0; // complete overlap; don't test ue_rev()
+		else n_rh = lt_ue_rev(s[0].l_seq, &s[0].seq[0], &s[0].qual[0], s[1].l_seq, rseq, rqual, g->opt.max_ovlp_pen, g->opt.min_ovlp_len, 2, rh);
 		n_ch = lt_ue_contained(s[0].l_seq, &s[0].seq[0], &s[0].qual[0], s[1].l_seq, rseq, rqual, g->opt.max_ovlp_pen, 2, ch);
-		// Sometimes forward and reverse search give identical hits, which are not caused by an ambiguous merge. I forgot why this is even a case.
-		is_complete = (n_fh == 1 && n_rh == 1 && fh[0]>>32 == 0 && rh[0]>>32 == 0 && (int32_t)fh[0] == (int32_t)rh[0]);
-		if (n_fh + n_rh + n_ch > 1 && !is_complete) {
+		if (n_fh + n_rh + n_ch > 1) {
 			s[0].type = s[1].type = LT_MERGE_AMBIGUOUS;
 		} else if (n_fh + n_rh + n_ch == 0) {
 			s[0].type = s[1].type = LT_NO_MERGE;
